@@ -742,10 +742,11 @@ def test_get_pair_base_currency(default_conf, mocker, pair, expected):
 def test_validate_timeframes(default_conf, mocker, timeframe):
     default_conf["timeframe"] = timeframe
     api_mock = MagicMock()
-    id_mock = PropertyMock(return_value="test_exchange")
-    type(api_mock).id = id_mock
-    timeframes = PropertyMock(return_value={"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h"})
-    type(api_mock).timeframes = timeframes
+    id_mock = MagicMock(return_value="test_exchange")
+    api_mock.id = id_mock
+    api_mock.options = {}
+    timeframes = {"1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h"}
+    api_mock.timeframes = timeframes
 
     mocker.patch(f"{EXMS}._init_ccxt", MagicMock(return_value=api_mock))
     mocker.patch(f"{EXMS}.reload_markets")
@@ -757,12 +758,11 @@ def test_validate_timeframes(default_conf, mocker, timeframe):
 def test_validate_timeframes_failed(default_conf, mocker):
     default_conf["timeframe"] = "3m"
     api_mock = MagicMock()
-    id_mock = PropertyMock(return_value="test_exchange")
-    type(api_mock).id = id_mock
-    timeframes = PropertyMock(
-        return_value={"15s": "15s", "1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h"}
-    )
-    type(api_mock).timeframes = timeframes
+    id_mock = MagicMock(return_value="test_exchange")
+    api_mock.id = id_mock
+    timeframes = {"15s": "15s", "1m": "1m", "5m": "5m", "15m": "15m", "1h": "1h"}
+    api_mock.timeframes = timeframes
+    api_mock.options = {}
 
     mocker.patch(f"{EXMS}._init_ccxt", MagicMock(return_value=api_mock))
     mocker.patch(f"{EXMS}.reload_markets")
@@ -4897,53 +4897,66 @@ def test_set_margin_mode(mocker, default_conf, margin_mode):
 
 
 @pytest.mark.parametrize(
-    "exchange_name, trading_mode, margin_mode, exception_thrown",
+    "exchange_name, trading_mode, margin_mode, allow_none_margin_mode, exception_thrown",
     [
-        ("binance", TradingMode.SPOT, None, False),
-        ("binance", TradingMode.MARGIN, MarginMode.ISOLATED, True),
-        ("kraken", TradingMode.SPOT, None, False),
-        ("kraken", TradingMode.MARGIN, MarginMode.ISOLATED, True),
-        ("kraken", TradingMode.FUTURES, MarginMode.ISOLATED, True),
-        ("bitmart", TradingMode.SPOT, None, False),
-        ("bitmart", TradingMode.MARGIN, MarginMode.CROSS, True),
-        ("bitmart", TradingMode.MARGIN, MarginMode.ISOLATED, True),
-        ("bitmart", TradingMode.FUTURES, MarginMode.CROSS, True),
-        ("bitmart", TradingMode.FUTURES, MarginMode.ISOLATED, True),
-        ("gate", TradingMode.MARGIN, MarginMode.ISOLATED, True),
-        ("okx", TradingMode.SPOT, None, False),
-        ("okx", TradingMode.MARGIN, MarginMode.CROSS, True),
-        ("okx", TradingMode.MARGIN, MarginMode.ISOLATED, True),
-        ("okx", TradingMode.FUTURES, MarginMode.CROSS, True),
-        ("binance", TradingMode.FUTURES, MarginMode.ISOLATED, False),
-        ("gate", TradingMode.FUTURES, MarginMode.ISOLATED, False),
-        ("okx", TradingMode.FUTURES, MarginMode.ISOLATED, False),
+        ("binance", TradingMode.SPOT, None, False, False),
+        ("binance", TradingMode.MARGIN, MarginMode.ISOLATED, False, True),
+        ("kraken", TradingMode.SPOT, None, False, False),
+        ("kraken", TradingMode.MARGIN, MarginMode.ISOLATED, False, True),
+        ("kraken", TradingMode.FUTURES, MarginMode.ISOLATED, False, True),
+        ("bitmart", TradingMode.SPOT, None, False, False),
+        ("bitmart", TradingMode.MARGIN, MarginMode.CROSS, False, True),
+        ("bitmart", TradingMode.MARGIN, MarginMode.ISOLATED, False, True),
+        ("bitmart", TradingMode.FUTURES, MarginMode.CROSS, False, True),
+        ("bitmart", TradingMode.FUTURES, MarginMode.ISOLATED, False, True),
+        ("gate", TradingMode.MARGIN, MarginMode.ISOLATED, False, True),
+        ("okx", TradingMode.SPOT, None, False, False),
+        ("okx", TradingMode.MARGIN, MarginMode.CROSS, False, True),
+        ("okx", TradingMode.MARGIN, MarginMode.ISOLATED, False, True),
+        ("okx", TradingMode.FUTURES, MarginMode.CROSS, False, True),
+        ("binance", TradingMode.FUTURES, MarginMode.ISOLATED, False, False),
+        ("gate", TradingMode.FUTURES, MarginMode.ISOLATED, False, False),
+        ("okx", TradingMode.FUTURES, MarginMode.ISOLATED, False, False),
         # * Remove once implemented
-        ("binance", TradingMode.MARGIN, MarginMode.CROSS, True),
-        ("binance", TradingMode.FUTURES, MarginMode.CROSS, False),
-        ("kraken", TradingMode.MARGIN, MarginMode.CROSS, True),
-        ("kraken", TradingMode.FUTURES, MarginMode.CROSS, True),
-        ("gate", TradingMode.MARGIN, MarginMode.CROSS, True),
-        ("gate", TradingMode.FUTURES, MarginMode.CROSS, True),
+        ("binance", TradingMode.MARGIN, MarginMode.CROSS, False, True),
+        ("binance", TradingMode.FUTURES, MarginMode.CROSS, False, False),
+        ("binance", TradingMode.FUTURES, None, False, True),
+        # Validate without margin mode
+        ("binance", TradingMode.FUTURES, None, True, False),
+        ("kraken", TradingMode.MARGIN, MarginMode.CROSS, False, True),
+        ("kraken", TradingMode.FUTURES, MarginMode.CROSS, False, True),
+        ("gate", TradingMode.MARGIN, MarginMode.CROSS, False, True),
+        ("gate", TradingMode.FUTURES, MarginMode.CROSS, False, True),
         # * Uncomment once implemented
-        # ("binance", TradingMode.MARGIN, MarginMode.CROSS, False),
-        # ("binance", TradingMode.FUTURES, MarginMode.CROSS, False),
-        # ("kraken", TradingMode.MARGIN, MarginMode.CROSS, False),
-        # ("kraken", TradingMode.FUTURES, MarginMode.CROSS, False),
-        # ("gate", TradingMode.MARGIN, MarginMode.CROSS, False),
-        # ("gate", TradingMode.FUTURES, MarginMode.CROSS, False),
+        # ("binance", TradingMode.MARGIN, MarginMode.CROSS, False, False),
+        # ("binance", TradingMode.FUTURES, MarginMode.CROSS, False, False),
+        # ("kraken", TradingMode.MARGIN, MarginMode.CROSS, False, False),
+        # ("kraken", TradingMode.FUTURES, MarginMode.CROSS, False, False),
+        # ("gate", TradingMode.MARGIN, MarginMode.CROSS, False, False),
+        # ("gate", TradingMode.FUTURES, MarginMode.CROSS, False, False),
     ],
 )
 def test_validate_trading_mode_and_margin_mode(
-    default_conf, mocker, exchange_name, trading_mode, margin_mode, exception_thrown
+    default_conf,
+    mocker,
+    exchange_name,
+    trading_mode,
+    margin_mode,
+    allow_none_margin_mode,
+    exception_thrown,
 ):
     exchange = get_patched_exchange(
         mocker, default_conf, exchange=exchange_name, mock_supported_modes=False
     )
     if exception_thrown:
         with pytest.raises(OperationalException):
-            exchange.validate_trading_mode_and_margin_mode(trading_mode, margin_mode)
+            exchange.validate_trading_mode_and_margin_mode(
+                trading_mode, margin_mode, allow_none_margin_mode
+            )
     else:
-        exchange.validate_trading_mode_and_margin_mode(trading_mode, margin_mode)
+        exchange.validate_trading_mode_and_margin_mode(
+            trading_mode, margin_mode, allow_none_margin_mode
+        )
 
 
 @pytest.mark.parametrize(
